@@ -45,7 +45,7 @@ activity['Closing_Balance'] = activity['Closing Balance Local']
 dt_string = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
 activity['Filename'] = activity['Cash Account Number'].astype(str) + ' ' + dt_string + '.csv' #datetime.now()
 
-# Mapping dataframe
+# Mapping dataframes
 mapping_bankid = pd.DataFrame(mapping['Bank Ref ID'])
 mapping_idbalance = pd.concat([mapping['Bank Ref ID'], mapping['Starting_Balance']], axis=1)
 
@@ -60,7 +60,7 @@ for i in mapping_bankid['Bank Ref ID']:
     write_file = write_file.dropna(subset='Bank Reference ID')
 
     if(write_file.empty):
-        print(f'No activity.')
+        print(f'__ has no activity.') # Error: Bank reference ID not found - empty
     else:
         # Calculate MM investment
         account = write_file['Bank Account'].values[0]
@@ -68,11 +68,22 @@ for i in mapping_bankid['Bank Ref ID']:
         overnight_mm = mm['Transaction Amount Local'].sum()
         write_file = write_file.append({'Bank Reference ID':'Starting Balance','Post Date':'2020-01-01','Value Date':'2020-01-1','Amount':balance,'Description':'Starting Balance','Bank Account':account,'Closing_Balance':0},ignore_index=True)
         calc_closing_balance = write_file['Amount'].sum()
-        print(f'Closing: {bank_closing_balance}')
-        print(f'MM investment: {overnight_mm}')
-        print(f'Calc closing: {calc_closing_balance}')
+        
+        # If closing and mm don't add up, log as exception
         if(bank_closing_balance + overnight_mm != calc_closing_balance):
             exceptions.append({'Bank Reference ID':account,'bank_closing_balance':bank_closing_balance,'MM value':overnight_mm,'Calculated Closing Balance':calc_closing_balance},ignore_index=True)
             any_exceptions = True
+
+        # Write output to excel sheet
         output_filename = str(account) + ' ' + dt_string + '.xlsx'
-        write_file.to_excel(f'.\Output\{output_filename}',sheet_name='Bank Transactions')
+        write_file.to_excel(f'./Output/{output_filename}',sheet_name='Bank Transactions')
+
+        # Write mapping to excel sheet
+        mapping.at[mapping[mapping['Bank Ref ID'].eq(account)].index[0],'Starting_Balance'] = calc_closing_balance
+        mapping.to_excel(mapping_filepath)
+
+# Write exceptions to excel sheet
+if(not exceptions.empty):
+    exceptions.to_excel('./Output/exceptions.xlsx')
+else:
+    print('No exceptions!')
